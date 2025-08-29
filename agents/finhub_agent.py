@@ -12,7 +12,7 @@ class FinnhubAgent(BaseAgent):
 
     def __init__(self, api_key: Optional[str] = None):
         """Initialize Finnhub agent."""
-        super().__init__(api_key or config.api.finnhub_key)
+        super().__init__(api_key or config["api"]["finnhub_key"])
         self.base_url = "https://finnhub.io/api/v1"
 
     async def fetch_stock_data(self, ticker: str, **kwargs) -> AgentResponse:

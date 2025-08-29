@@ -7,7 +7,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class AgentResponse:
     """Standardized response from agents."""

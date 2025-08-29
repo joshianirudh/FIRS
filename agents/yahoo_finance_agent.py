@@ -12,7 +12,7 @@ class YahooFinanceAgent(BaseAgent):
 
     def __init__(self, api_key: Optional[str] = None):
         """Initialize Yahoo Finance agent."""
-        super().__init__(api_key or config.api.yahoo_finance_key)
+        super().__init__(api_key or config["api"]["yahoo_finance_key"])
         self.base_url = "https://query1.finance.yahoo.com"
         # Note: yfinance library doesn't require API key
 

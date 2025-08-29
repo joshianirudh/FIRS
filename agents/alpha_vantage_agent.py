@@ -1,7 +1,7 @@
 """Alpha Vantage API agent for fetching financial data."""
 import asyncio
 from typing import Dict, Any, Optional
-import httpx
+# import httpx
 import json
 from datetime import datetime
 
@@ -14,7 +14,7 @@ class AlphaVantageAgent(BaseAgent):
 
     def __init__(self, api_key: Optional[str] = None):
         """Initialize Alpha Vantage agent."""
-        super().__init__(api_key or config.api.alpha_vantage_key)
+        super().__init__(api_key or config["api"]["alpha_vantage_key"])
         self.base_url = "https://www.alphavantage.co/query"
         self.rate_limit = 5  # 5 API requests per minute for free tier
 
