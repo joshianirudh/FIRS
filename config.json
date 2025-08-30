@@ -1,0 +1,54 @@
+{
+  "llm": {
+    "provider": "ollama",
+    "model": "llama3.1:8b",
+    "temperature": 0.3,
+    "max_tokens": 2048,
+    "timeout": 120,
+    "ollama_base_url": "http://localhost:11434",
+    "openai_api_key": null,
+    "openai_base_url": "https://api.openai.com/v1"
+  },
+  "api": {
+    "enabled_apis": ["alpha_vantage", "yahoo_finance", "finnhub", "web_search"],
+    "alpha_vantage_key": null,
+    "finnhub_key": null,
+    "yahoo_finance_key": null,
+    "web_search_key": null,
+    "rate_limit_per_minute": 60,
+    "concurrent_requests": 5,
+    "request_timeout": 30,
+    "connection_timeout": 10
+  },
+  "web_search": {
+    "search_depth": "standard",
+    "max_news_articles": 10,
+    "max_expert_reports": 5,
+    "news_days_back": 7,
+    "preferred_news_sources": ["reuters", "bloomberg", "cnbc", "yahoo_finance"],
+    "max_social_posts": 20
+  },
+  "report": {
+    "include_executive_summary": true,
+    "detail_level": "standard",
+    "save_to_file": true,
+    "output_format": "json",
+    "include_charts": false,
+    "max_report_length": 5000
+  },
+  "database": {
+    "enable_vector_storage": false,
+    "vector_dimension": 1536,
+    "similarity_threshold": 0.8,
+    "qdrant_url": "http://localhost:6333",
+    "qdrant_api_key": null
+  },
+  "system": {
+    "log_level": "INFO",
+    "max_concurrent_requests": 10,
+    "cache_enabled": true,
+    "max_retries": 3,
+    "debug_mode": false,
+    "mock_data_fallback": true
+  }
+}

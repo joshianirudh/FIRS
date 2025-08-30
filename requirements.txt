@@ -1,0 +1,11 @@
+# Core dependencies
+httpx>=0.24.0
+asyncio
+pathlib
+pickle
+
+# Vector database
+qdrant-client>=1.6.0
+
+# Optional: for better performance
+numpy>=1.21.0
