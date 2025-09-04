@@ -96,6 +96,7 @@ class FinancialReportGenerator:
             # Step 2: Process web search data if available
             web_summaries = {}
             if web_search_data:
+                print(f"Web search data: {web_search_data}")
                 logger.info("Step 2: Processing web search data...")
                 web_summaries = await self._process_web_search_data(ticker, web_search_data)
             

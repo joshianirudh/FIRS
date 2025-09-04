@@ -1,10 +1,14 @@
 """Yahoo Finance API agent for fetching financial data."""
 import asyncio
+import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
+import yfinance as yf
 
 from .base_agent import BaseAgent, AgentResponse
 from config import config
+
+logger = logging.getLogger(__name__)
 
 
 class YahooFinanceAgent(BaseAgent):
@@ -15,6 +19,21 @@ class YahooFinanceAgent(BaseAgent):
         super().__init__(api_key or config["api"]["yahoo_finance_key"])
         self.base_url = "https://query1.finance.yahoo.com"
         # Note: yfinance library doesn't require API key
+        self.name = "YahooFinanceAgent"
+
+    async def _get_ticker_info(self, ticker: str) -> Optional[yf.Ticker]:
+        """Get yfinance Ticker object with error handling."""
+        try:
+            ticker_obj = yf.Ticker(ticker)
+            # Test if ticker is valid by trying to get info
+            info = ticker_obj.info
+            if not info or len(info) <= 1:  # Only metadata or empty
+                logger.warning(f"No data available for ticker: {ticker}")
+                return None
+            return ticker_obj
+        except Exception as e:
+            logger.error(f"Failed to get ticker info for {ticker}: {e}")
+            return None
 
     async def fetch_stock_data(self, ticker: str, **kwargs) -> AgentResponse:
         """
@@ -33,33 +52,56 @@ class YahooFinanceAgent(BaseAgent):
                 source=self.name
             )
 
-        # Mock implementation
-        mock_data = {
-            "symbol": ticker,
-            "price": 150.50,
-            "previousClose": 148.25,
-            "open": 149.00,
-            "dayLow": 148.50,
-            "dayHigh": 151.75,
-            "volume": 52341000,
-            "averageVolume": 48000000,
-            "marketCap": "2.45T",
-            "beta": 1.25,
-            "trailingPE": 29.8,
-            "forwardPE": 27.2
-        }
+        ticker_obj = await self._get_ticker_info(ticker)
+        if not ticker_obj:
+            return AgentResponse(
+                success=False,
+                error=f"Failed to get data for ticker: {ticker}",
+                source=self.name
+            )
 
-        # Real implementation would use yfinance:
-        # import yfinance as yf
-        # stock = yf.Ticker(ticker)
-        # info = stock.info
+        try:
+            info = ticker_obj.info
+            
+            response_data = {
+                "symbol": info.get("symbol", ticker),
+                "price": info.get("currentPrice", info.get("regularMarketPrice", 0)),
+                "previousClose": info.get("previousClose", 0),
+                "open": info.get("open", 0),
+                "dayLow": info.get("dayLow", 0),
+                "dayHigh": info.get("dayHigh", 0),
+                "volume": info.get("volume", 0),
+                "averageVolume": info.get("averageVolume", 0),
+                "marketCap": info.get("marketCap", 0),
+                "beta": info.get("beta", 0),
+                "trailingPE": info.get("trailingPE", 0),
+                "forwardPE": info.get("forwardPE", 0),
+                "fiftyTwoWeekHigh": info.get("fiftyTwoWeekHigh", 0),
+                "fiftyTwoWeekLow": info.get("fiftyTwoWeekLow", 0),
+                "dividendYield": info.get("dividendYield", 0),
+                "priceToBook": info.get("priceToBook", 0),
+                "returnOnEquity": info.get("returnOnEquity", 0),
+                "returnOnAssets": info.get("returnOnAssets", 0),
+                "debtToEquity": info.get("debtToEquity", 0),
+                "currentRatio": info.get("currentRatio", 0),
+                "quickRatio": info.get("quickRatio", 0),
+                "last_updated": datetime.now().isoformat()
+            }
 
-        return AgentResponse(
-            success=True,
-            data=mock_data,
-            source=self.name,
-            metadata={"ticker": ticker, "market": "US"}
-        )
+            return AgentResponse(
+                success=True,
+                data=response_data,
+                source=self.name,
+                metadata={"ticker": ticker, "market": "US"}
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch stock data for {ticker}: {e}")
+            return AgentResponse(
+                success=False,
+                error=f"Failed to fetch stock data: {str(e)}",
+                source=self.name
+            )
 
     async def fetch_historical_data(
             self,
@@ -86,33 +128,64 @@ class YahooFinanceAgent(BaseAgent):
                 source=self.name
             )
 
-        # Mock implementation
-        mock_data = {
-            "symbol": ticker,
-            "period": f"{start_date} to {end_date}",
-            "interval": kwargs.get("interval", "1d"),
-            "data": [
-                {"date": "2024-01-01", "open": 145.0, "high": 150.0, "low": 144.0, "close": 149.0, "adjClose": 149.0,
-                 "volume": 50000000},
-                {"date": "2024-01-02", "open": 149.0, "high": 152.0, "low": 148.0, "close": 151.0, "adjClose": 151.0,
-                 "volume": 48000000},
-            ]
-        }
+        ticker_obj = await self._get_ticker_info(ticker)
+        if not ticker_obj:
+            return AgentResponse(
+                success=False,
+                error=f"Failed to get data for ticker: {ticker}",
+                source=self.name
+            )
 
-        # Real implementation would use yfinance:
-        # stock = yf.Ticker(ticker)
-        # hist = stock.history(start=start_date, end=end_date)
-
-        return AgentResponse(
-            success=True,
-            data=mock_data,
-            source=self.name,
-            metadata={
-                "ticker": ticker,
+        try:
+            interval = kwargs.get("interval", "1d")
+            hist = ticker_obj.history(start=start_date, end=end_date, interval=interval)
+            
+            if hist.empty:
+                return AgentResponse(
+                    success=False,
+                    error=f"No historical data available for {ticker} from {start_date} to {end_date}",
+                    source=self.name
+                )
+            
+            # Convert DataFrame to list of dictionaries
+            data = []
+            for date, row in hist.iterrows():
+                data.append({
+                    "date": date.strftime("%Y-%m-%d"),
+                    "open": float(row.get("Open", 0)),
+                    "high": float(row.get("High", 0)),
+                    "low": float(row.get("Low", 0)),
+                    "close": float(row.get("Close", 0)),
+                    "adjClose": float(row.get("Adj Close", 0)),
+                    "volume": int(row.get("Volume", 0))
+                })
+            
+            response_data = {
+                "symbol": ticker,
                 "period": f"{start_date} to {end_date}",
-                "interval": kwargs.get("interval", "1d")
+                "interval": interval,
+                "data": data,
+                "data_points": len(data)
             }
-        )
+
+            return AgentResponse(
+                success=True,
+                data=response_data,
+                source=self.name,
+                metadata={
+                    "ticker": ticker,
+                    "period": f"{start_date} to {end_date}",
+                    "interval": interval
+                }
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch historical data for {ticker}: {e}")
+            return AgentResponse(
+                success=False,
+                error=f"Failed to fetch historical data: {str(e)}",
+                source=self.name
+            )
 
     async def fetch_company_info(self, ticker: str) -> AgentResponse:
         """
@@ -131,26 +204,95 @@ class YahooFinanceAgent(BaseAgent):
                 source=self.name
             )
 
-        # Mock implementation
-        mock_data = {
-            "symbol": ticker,
-            "shortName": "Example Corp",
-            "longName": "Example Corporation",
-            "sector": "Technology",
-            "industry": "Consumer Electronics",
-            "website": "https://www.example.com",
-            "description": "Example Corporation designs, manufactures, and markets...",
-            "employees": 150000,
-            "country": "United States",
-            "currency": "USD"
-        }
+        ticker_obj = await self._get_ticker_info(ticker)
+        if not ticker_obj:
+            return AgentResponse(
+                success=False,
+                error=f"Failed to get data for ticker: {ticker}",
+                source=self.name
+            )
 
-        return AgentResponse(
-            success=True,
-            data=mock_data,
-            source=self.name,
-            metadata={"ticker": ticker}
-        )
+        try:
+            info = ticker_obj.info
+            
+            response_data = {
+                "symbol": info.get("symbol", ticker),
+                "shortName": info.get("shortName", ""),
+                "longName": info.get("longName", ""),
+                "sector": info.get("sector", ""),
+                "industry": info.get("industry", ""),
+                "website": info.get("website", ""),
+                "description": info.get("longBusinessSummary", ""),
+                "employees": info.get("fullTimeEmployees", 0),
+                "country": info.get("country", ""),
+                "currency": info.get("currency", ""),
+                "exchange": info.get("exchange", ""),
+                "market": info.get("market", ""),
+                "quoteType": info.get("quoteType", ""),
+                "marketCap": info.get("marketCap", 0),
+                "enterpriseValue": info.get("enterpriseValue", 0),
+                "floatShares": info.get("floatShares", 0),
+                "sharesOutstanding": info.get("sharesOutstanding", 0),
+                "sharesShort": info.get("sharesShort", 0),
+                "sharesShortPriorMonth": info.get("sharesShortPriorMonth", 0),
+                "sharesShortPreviousMonthDate": info.get("sharesShortPreviousMonthDate", ""),
+                "dateShortInterest": info.get("dateShortInterest", ""),
+                "sharesPercentSharesOut": info.get("sharesPercentSharesOut", 0),
+                "heldPercentInsiders": info.get("heldPercentInsiders", 0),
+                "heldPercentInstitutions": info.get("heldPercentInstitutions", 0),
+                "shortRatio": info.get("shortRatio", 0),
+                "shortPercentOfFloat": info.get("shortPercentOfFloat", 0),
+                "impliedSharesOutstanding": info.get("impliedSharesOutstanding", 0),
+                "bookValue": info.get("bookValue", 0),
+                "priceToBook": info.get("priceToBook", 0),
+                "priceToSalesTrailing12Months": info.get("priceToSalesTrailing12Months", 0),
+                "enterpriseToRevenue": info.get("enterpriseToRevenue", 0),
+                "enterpriseToEbitda": info.get("enterpriseToEbitda", 0),
+                "fiftyTwoWeekChange": info.get("fiftyTwoWeekChange", 0),
+                "fiftyTwoWeekHigh": info.get("fiftyTwoWeekHigh", 0),
+                "fiftyTwoWeekLow": info.get("fiftyTwoWeekLow", 0),
+                "fiftyDayAverage": info.get("fiftyDayAverage", 0),
+                "twoHundredDayAverage": info.get("twoHundredDayAverage", 0),
+                "trailingAnnualDividendRate": info.get("trailingAnnualDividendRate", 0),
+                "trailingAnnualDividendYield": info.get("trailingAnnualDividendYield", 0),
+                "payoutRatio": info.get("payoutRatio", 0),
+                "fiveYearAvgDividendYield": info.get("fiveYearAvgDividendYield", 0),
+                "forwardEps": info.get("forwardEps", 0),
+                "forwardPE": info.get("forwardPE", 0),
+                "priceToSalesTrailing12Months": info.get("priceToSalesTrailing12Months", 0),
+                "pegRatio": info.get("pegRatio", 0),
+                "trailingEps": info.get("trailingEps", 0),
+                "trailingPE": info.get("trailingPE", 0),
+                "returnOnAssets": info.get("returnOnAssets", 0),
+                "returnOnEquity": info.get("returnOnEquity", 0),
+                "revenue": info.get("totalRevenue", 0),
+                "revenuePerShare": info.get("revenuePerShare", 0),
+                "revenueGrowth": info.get("revenueGrowth", 0),
+                "grossProfits": info.get("grossProfits", 0),
+                "freeCashflow": info.get("freeCashflow", 0),
+                "operatingCashflow": info.get("operatingCashflow", 0),
+                "earningsGrowth": info.get("earningsGrowth", 0),
+                "revenueGrowth": info.get("revenueGrowth", 0),
+                "grossMargins": info.get("grossMargins", 0),
+                "ebitdaMargins": info.get("ebitdaMargins", 0),
+                "operatingMargins": info.get("operatingMargins", 0),
+                "profitMargins": info.get("profitMargins", 0)
+            }
+
+            return AgentResponse(
+                success=True,
+                data=response_data,
+                source=self.name,
+                metadata={"ticker": ticker}
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch company info for {ticker}: {e}")
+            return AgentResponse(
+                success=False,
+                error=f"Failed to fetch company info: {str(e)}",
+                source=self.name
+            )
 
     async def fetch_options_chain(self, ticker: str) -> AgentResponse:
         """
@@ -162,23 +304,92 @@ class YahooFinanceAgent(BaseAgent):
         Returns:
             AgentResponse with options data
         """
-        # Additional method specific to Yahoo Finance
-        mock_data = {
-            "symbol": ticker,
-            "expirations": ["2024-01-19", "2024-01-26", "2024-02-02"],
-            "calls": [
-                {"strike": 145, "lastPrice": 6.50, "volume": 1200, "openInterest": 5000},
-                {"strike": 150, "lastPrice": 3.25, "volume": 800, "openInterest": 3500}
-            ],
-            "puts": [
-                {"strike": 145, "lastPrice": 2.15, "volume": 600, "openInterest": 2000},
-                {"strike": 140, "lastPrice": 1.05, "volume": 400, "openInterest": 1500}
-            ]
-        }
+        if not self.validate_ticker(ticker):
+            return AgentResponse(
+                success=False,
+                error=f"Invalid ticker: {ticker}",
+                source=self.name
+            )
 
-        return AgentResponse(
-            success=True,
-            data=mock_data,
-            source=self.name,
-            metadata={"ticker": ticker, "type": "options"}
-        )
+        ticker_obj = await self._get_ticker_info(ticker)
+        if not ticker_obj:
+            return AgentResponse(
+                success=False,
+                error=f"Failed to get data for ticker: {ticker}",
+                source=self.name
+            )
+
+        try:
+            # Get options expiration dates
+            expirations = ticker_obj.options
+            
+            if not expirations:
+                return AgentResponse(
+                    success=False,
+                    error=f"No options data available for {ticker}",
+                    source=self.name
+                )
+            
+            # Get options chain for the first available expiration
+            first_exp = expirations[0]
+            options = ticker_obj.option_chain(first_exp)
+            
+            calls = []
+            puts = []
+            
+            if options.calls is not None and not options.calls.empty:
+                for _, row in options.calls.iterrows():
+                    calls.append({
+                        "strike": float(row.get("strike", 0)),
+                        "lastPrice": float(row.get("lastPrice", 0)),
+                        "bid": float(row.get("bid", 0)),
+                        "ask": float(row.get("ask", 0)),
+                        "volume": int(row.get("volume", 0)),
+                        "openInterest": int(row.get("openInterest", 0)),
+                        "impliedVolatility": float(row.get("impliedVolatility", 0)),
+                        "delta": float(row.get("delta", 0)),
+                        "gamma": float(row.get("gamma", 0)),
+                        "theta": float(row.get("theta", 0)),
+                        "vega": float(row.get("vega", 0))
+                    })
+            
+            if options.puts is not None and not options.puts.empty:
+                for _, row in options.puts.iterrows():
+                    puts.append({
+                        "strike": float(row.get("strike", 0)),
+                        "lastPrice": float(row.get("lastPrice", 0)),
+                        "bid": float(row.get("bid", 0)),
+                        "ask": float(row.get("ask", 0)),
+                        "volume": int(row.get("volume", 0)),
+                        "openInterest": int(row.get("openInterest", 0)),
+                        "impliedVolatility": float(row.get("impliedVolatility", 0)),
+                        "delta": float(row.get("delta", 0)),
+                        "gamma": float(row.get("gamma", 0)),
+                        "theta": float(row.get("theta", 0)),
+                        "vega": float(row.get("vega", 0))
+                    })
+            
+            response_data = {
+                "symbol": ticker,
+                "expirations": expirations,
+                "current_expiration": first_exp,
+                "calls": calls,
+                "puts": puts,
+                "call_count": len(calls),
+                "put_count": len(puts)
+            }
+
+            return AgentResponse(
+                success=True,
+                data=response_data,
+                source=self.name,
+                metadata={"ticker": ticker, "type": "options", "expiration": first_exp}
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch options chain for {ticker}: {e}")
+            return AgentResponse(
+                success=False,
+                error=f"Failed to fetch options chain: {str(e)}",
+                source=self.name
+            )

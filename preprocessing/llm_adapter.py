@@ -40,9 +40,10 @@ class BaseLLMProvider(ABC):
 class OllamaProvider(BaseLLMProvider):
     """Ollama LLM provider implementation."""
     
-    def __init__(self, model: str = "llama2", base_url: Optional[str] = None):
+    def __init__(self, model: str = None, base_url: Optional[str] = None):
         super().__init__(base_url=base_url or config["llm"].get("ollama_base_url", "http://localhost:11434"))
-        self.model = model
+        # Use model from config if not specified, fallback to llama2
+        self.model = model or config["llm"].get("model", "llama2")
         self.api_url = f"{self.base_url}/api/generate"
     
     async def generate_text(self, prompt: str, **kwargs) -> str:
@@ -225,6 +226,11 @@ async def create_llm_adapter(provider: str = "ollama", **kwargs) -> LLMAdapter:
     """Create an LLM adapter with the specified provider."""
     try:
         provider_enum = LLMProvider(provider.lower())
+        
+        # If using Ollama and no model specified, get from config
+        if provider_enum == LLMProvider.OLLAMA and "model" not in kwargs:
+            kwargs["model"] = config["llm"].get("model", "llama2")
+        
         return LLMAdapter(provider_enum, **kwargs)
     except ValueError:
         raise ValueError(f"Unsupported provider: {provider}. Supported: {[p.value for p in LLMProvider]}")

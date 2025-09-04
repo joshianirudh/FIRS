@@ -412,3 +412,39 @@ def _generate_overall_recommendation(summaries: Dict[str, Any]) -> str:
         return "SELL - Multiple sources recommend selling"
     else:
         return "HOLD - Mixed recommendations, consider holding"
+
+
+async def ticker_to_company_name(ticker: str, llm_adapter=None) -> str:
+    """
+    Convert a stock ticker to company name using LLM.
+    
+    Args:
+        ticker: Stock ticker symbol (e.g., 'AAPL')
+        llm_adapter: LLM adapter instance for conversion
+        
+    Returns:
+        Company name (e.g., 'Apple Inc.')
+    """
+    if not llm_adapter:
+        from .llm_adapter import create_llm_adapter
+        llm_adapter = await create_llm_adapter()
+    
+    prompt = f"""
+    Convert the stock ticker '{ticker}' to its full company name.
+    Respond with only the company name, nothing else.
+    Examples:
+    - AAPL -> Apple Inc.
+    - MSFT -> Microsoft Corporation
+    - TSLA -> Tesla Inc.
+    - GOOGL -> Alphabet Inc.
+    """
+    
+    try:
+        company_name = await llm_adapter.generate_text(prompt, temperature=0.1)
+        # Clean up the response
+        company_name = company_name.strip().replace('"', '').replace("'", "")
+        return company_name
+    except Exception as e:
+        logger.warning(f"Failed to convert ticker {ticker} to company name: {e}")
+        # Fallback to ticker if LLM fails
+        return ticker
